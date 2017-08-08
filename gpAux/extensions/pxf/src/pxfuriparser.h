@@ -78,6 +78,9 @@ typedef struct GPHDUri
  * Parses a string URI into a data structure
  */
 GPHDUri	*parseGPHDUri(const char *uri_str);
+int		 GPHDUri_get_value_for_opt(GPHDUri *uri, char *key, char **val, bool emit_error);
+void 	 GPHDUri_verify_no_duplicate_options(GPHDUri *uri);
+void 	 GPHDUri_verify_core_options_exist(GPHDUri *uri, List *coreOptions);
 
 /*
  * Frees the elements of the data structure

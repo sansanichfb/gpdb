@@ -66,7 +66,7 @@ typedef struct GPHDUri
 {
     char 			*uri;		/* the unparsed user uri	*/
 	char			*protocol;	/* the protocol name		*/
-	char			*host;		/* host name str			*/
+	char			*host;		/* host/cluster name str	*/
 	char			*port;		/* port number as string	*/
 	char			*data;      /* data location (path)     */
 	char			*profile;   /* profile option			*/
@@ -81,6 +81,7 @@ GPHDUri	*parseGPHDUri(const char *uri_str);
 int		 GPHDUri_get_value_for_opt(GPHDUri *uri, char *key, char **val, bool emit_error);
 void 	 GPHDUri_verify_no_duplicate_options(GPHDUri *uri);
 void 	 GPHDUri_verify_core_options_exist(GPHDUri *uri, List *coreOptions);
+void 	 GPHDUri_verify_cluster_exists(GPHDUri *uri, const char* cluster);
 
 /*
  * Frees the elements of the data structure

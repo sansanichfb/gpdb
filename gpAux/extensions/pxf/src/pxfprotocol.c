@@ -47,9 +47,10 @@ static void check_caller(PG_FUNCTION_ARGS, const char* func_name);
 Datum
 pxfprotocol_validate_urls(PG_FUNCTION_ARGS)
 {
-    //TODO: provide real implementation
     GPHDUri	*uri;
     char *option;
+    char *fragmenter = NULL;
+    char *profile = NULL;
     bool is_writable = EXTPROTOCOL_VALIDATOR_GET_DIRECTION(fcinfo) == EXT_VALIDATE_WRITE;
 
     /* Must be called via the external table format manager */
@@ -60,22 +61,37 @@ pxfprotocol_validate_urls(PG_FUNCTION_ARGS)
      * Condition 1: there must be only ONE url.
      */
     if (EXTPROTOCOL_VALIDATOR_GET_NUM_URLS(fcinfo) != 1)
+    {
         ereport(ERROR,
                 (errcode(ERRCODE_PROTOCOL_VIOLATION),
                         errmsg("number of URLs must be one")));
+    }
 
-    /*
-     * Condition 2: url formatting of extra options.
-     */
     uri = parseGPHDUri(EXTPROTOCOL_VALIDATOR_GET_NTH_URL(fcinfo, 1));
 
     /*
-     * Condition 3: No duplicate options.
+     * Condition 2: check for valid cluster name
      */
+    GPHDUri_verify_cluster_exists(uri, "default");
+
+    /*
+     * Condition 3: Test that Fragmenter or Profile was specified in the URI
+     */
+    if (GPHDUri_get_value_for_opt(uri, "fragmenter", &fragmenter, false) != 0
+        && GPHDUri_get_value_for_opt(uri, "profile", &profile, false) != 0)
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_SYNTAX_ERROR),
+                        errmsg("FRAGMENTER or PROFILE option must exist in %s", uri->uri)));
+    }
+
+    /*
+    * Condition 4: No duplicate options.
+    */
     GPHDUri_verify_no_duplicate_options(uri);
 
     /*
-     * Condition 4: existence of core options if profile wasn't supplied
+     * Condition 5: existence of core options if profile wasn't supplied
      */
     if (GPHDUri_get_value_for_opt(uri, "profile", &option, false) < 0)
     {

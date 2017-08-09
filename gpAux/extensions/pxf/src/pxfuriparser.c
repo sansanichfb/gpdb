@@ -19,6 +19,7 @@
 
 #include "pxfuriparser.h"
 #include "pxfutils.h"
+#include "utils/formatting.h"
 
 static const char* segwork_substring = "segwork=";
 static const char segwork_separator = '@';
@@ -574,3 +575,133 @@ GPHDUri_dup_without_segwork(const char* uri)
 	return no_segwork;
 }
 
+/*
+ * GPHDUri_get_value_for_opt
+ *
+ * Given a key, find the matching val and assign it to 'val'.
+ * If 'emit_error' is set, report an error and quit if the
+ * requested key or its value is missing.
+ *
+ * Returns 0 if the key was found, -1 otherwise.
+ */
+int
+GPHDUri_get_value_for_opt(GPHDUri *uri, char *key, char **val, bool emit_error)
+{
+	ListCell	*item;
+
+	foreach(item, uri->options)
+	{
+		OptionData *data = (OptionData*)lfirst(item);
+		if (pg_strcasecmp(data->key, key) == 0)
+		{
+			*val = data->value;
+			if (emit_error && !(*val))
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+								errmsg("No value assigned to the %s option in "
+											   "%s", key, uri->uri)));
+			return 0;
+		}
+	}
+
+	if (emit_error)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+						errmsg("Missing %s option in %s", key, uri->uri)));
+	return -1;
+}
+
+/*
+ * GPHDUri_verify_no_duplicate_options
+ * verify each option appears only once (case insensitive)
+ */
+void
+GPHDUri_verify_no_duplicate_options(GPHDUri *uri)
+{
+	ListCell *option = NULL;
+	List *duplicateKeys = NIL;
+	List *previousKeys = NIL;
+	StringInfoData duplicates;
+	initStringInfo(&duplicates);
+
+	foreach(option, uri->options)
+	{
+		OptionData *data = (OptionData*)lfirst(option);
+		Value *key = makeString(str_toupper(data->key, strlen(data->key)));
+
+		if(!list_member(previousKeys, key))
+		{
+			previousKeys = lappend(previousKeys, key);
+		}
+		else if(!list_member(duplicateKeys, key))
+		{
+			duplicateKeys = lappend(duplicateKeys, key);
+			appendStringInfo(&duplicates, "%s, ", strVal(key));
+		}
+	}
+
+	if(duplicates.len > 0)
+	{
+		truncateStringInfo(&duplicates, duplicates.len - strlen(", ")); //omit trailing ', '
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+						errmsg("Invalid URI %s: Duplicate option(s): %s", uri->uri, duplicates.data)));
+	}
+	list_free(duplicateKeys);
+	list_free(previousKeys);
+	pfree(duplicates.data);
+}
+
+/*
+ * GPHDUri_verify_core_options_exist
+ * This function is given a list of core options to verify their existence.
+ */
+void
+GPHDUri_verify_core_options_exist(GPHDUri *uri, List *coreOptions)
+{
+    char *key = NULL;
+    ListCell *coreOption = NULL;
+    StringInfoData missing;
+    initStringInfo(&missing);
+
+    foreach(coreOption, coreOptions)
+    {
+        bool optExist = false;
+        ListCell *option = NULL;
+        foreach(option, uri->options)
+        {
+            key = ((OptionData*)lfirst(option))->key;
+            if (pg_strcasecmp(key, lfirst(coreOption)) == 0)
+            {
+                optExist = true;
+                break;
+            }
+        }
+        if(!optExist)
+        {
+            appendStringInfo(&missing, "%s and ", (char*)lfirst(coreOption));
+        }
+    }
+
+    if(missing.len > 0)
+    {
+        truncateStringInfo(&missing, missing.len - strlen(" and ")); //omit trailing ' and '
+        ereport(ERROR,
+                (errcode(ERRCODE_SYNTAX_ERROR),
+                        errmsg("Invalid URI %s: PROFILE or %s option(s) missing", uri->uri, missing.data)));
+    }
+    pfree(missing.data);
+}
+
+/*
+ * GPHDUri_verify_cluster_exist
+ * This function is given the name of the cluster to verify their existence.
+ */
+void
+GPHDUri_verify_cluster_exists(GPHDUri *uri, const char* cluster)
+{
+	if (pg_strcasecmp(uri->host, cluster) != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+						errmsg("Invalid URI %s: CLUSTER NAME %s not found", uri->host, cluster)));
+}

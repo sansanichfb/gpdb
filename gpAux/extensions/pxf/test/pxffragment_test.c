@@ -18,30 +18,49 @@
 /* helper functions */
 static List* prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid);
 static List* prepare_fragment_list_with_replicas(int fragtotal, int segindex, int segtotal, int xid, int num_replicas);
+static void print_list(List* list);
+static void test_list(int segindex, int segtotal, int xid, int fragtotalin, int fragtotalout, int frags[]);
 
 void
 test_filter_fragments_for_segment(void **state)
 {
-    // single segment -- all 3 fragments should be processed by it
-    List* list = prepare_fragment_list(3, 0, 1, 1);
-    List* filtered = filter_fragments_for_segment(list);
+    // single segment, xid=1 -- all 3 fragments should be processed by it
+    int expected[] = {0,1,2};
+    test_list(0, 1, 1, 3, 3, expected);
 
-    assert_int_equal(filtered->length, 3);
-    //assert_int_equal(((DataFragment *)linitial(filtered))->index, 0);
-    //assert_int_equal(((DataFragment *)lsecond(filtered)))->index, 1);
-    //assert_int_equal(((DataFragment *)lthird(filtered)))->index, 2);
+    //TODO no segments ??
 
 }
 
+static void
+test_list(int segindex, int segtotal, int xid, int fragtotalin, int fragtotalout, int frags[])
+{
+    /* prepare the input list */
+    List* list = prepare_fragment_list(3, 0, 1, 1);
+    print_list(list);
+    /* filter the list */
+    List* filtered = filter_fragments_for_segment(list);
+    print_list(list);
+    /* assert results */
+    assert_int_equal(filtered->length, fragtotalout);
+    ListCell* cell;
+    int i;
+    foreach_with_count(cell, filtered, i)
+    {
+        printf("i=%d\n", i);
+        assert_int_equal(((DataFragment *) lfirst(cell))->index, frags[i]);
+    }
+}
+
 static List*
-prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid) {
+prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid)
+{
     GpIdentity.segindex = segindex;
     GpIdentity.numsegments = segtotal;
 
     will_return(getDistributedTransactionId, xid);
 
     List* result = NIL;
-
     for (int i=0; i<fragtotal; i++) {
         DataFragment* fragment = palloc0(sizeof(DataFragment));
         fragment->index = i;
@@ -51,7 +70,8 @@ prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid) {
 }
 
 static List*
-prepare_fragment_list_with_replicas(int fragtotal, int segindex, int segtotal, int xid, int num_replicas) {
+prepare_fragment_list_with_replicas(int fragtotal, int segindex, int segtotal, int xid, int num_replicas)
+{
     GpIdentity.segindex = segindex;
     GpIdentity.numsegments = segtotal;
 
@@ -74,7 +94,8 @@ prepare_fragment_list_with_replicas(int fragtotal, int segindex, int segtotal, i
     return result;
 }
 
-void test_assign_pxf_location_to_fragments(void **state)
+void
+test_assign_pxf_location_to_fragments(void **state)
 {
 	List* list = prepare_fragment_list_with_replicas(2, 0, 1, 9, 3);
 	assign_pxf_location_to_fragments(list);
@@ -89,6 +110,18 @@ void test_assign_pxf_location_to_fragments(void **state)
 	}
 }
 
+//TODO remove helper function
+static void
+print_list(List* list)
+{
+    ListCell* cell;
+    printf("list:\n");
+    foreach(cell, list)
+    {
+        printf("%d,", ((DataFragment *) (cell->data.ptr_value))->index);
+    }
+    printf("\n");
+}
 
 int
 main(int argc, char* argv[])

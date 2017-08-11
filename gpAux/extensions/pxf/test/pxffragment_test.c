@@ -15,40 +15,114 @@
 #include "mock/pxfuriparser_mock.c"
 #include "mock/pxfutils_mock.c"
 
+#define ARRSIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 /* helper functions */
 static List* prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid);
 static List* prepare_fragment_list_with_replicas(int fragtotal, int segindex, int segtotal, int xid, int num_replicas);
 static void print_list(List* list);
-static void test_list(int segindex, int segtotal, int xid, int fragtotalin, int fragtotalout, int frags[]);
+static void test_list(int segindex, int segtotal, int xid, int fragtotal, int expected[], int expected_total);
 
 void
 test_filter_fragments_for_segment(void **state)
 {
-    // single segment, xid=1 -- all 3 fragments should be processed by it
-    int expected[] = {0,1,2};
-    test_list(0, 1, 1, 3, 3, expected);
+    // single segment, 0 frags, xid=1 -- should throw exception
+    //int expected0[1] = {0};
+    //test_list(0, 1, 1, 0, NULL, 0);
 
-    //TODO no segments ??
+    /* --- 1 segment, all fragements should be processed by it */
+    int expected_1_1_0[1] = {0}; // 1 fragment
+    test_list(0, 1, 1, 1, expected_1_1_0, ARRSIZE(expected_1_1_0)); // xid=1
+    test_list(0, 1, 2, 1, expected_1_1_0, ARRSIZE(expected_1_1_0)); // xid=2
+
+    int expected_1_2_0[2] = {0,1};  // 2 fragments
+    test_list(0, 1, 1, 2, expected_1_2_0, ARRSIZE(expected_1_2_0)); // xid=1
+    test_list(0, 1, 2, 2, expected_1_2_0, ARRSIZE(expected_1_2_0)); // xid=2
+
+    int expected_1_3_0[3] = {0,1,2};  // 3 fragments
+    test_list(0, 1, 1, 3, expected_1_3_0, ARRSIZE(expected_1_3_0)); // xid=1
+    test_list(0, 1, 2, 3, expected_1_3_0, ARRSIZE(expected_1_3_0)); // xid=2
+
+    /* --- 2 segments, each processes every other fragment, based on xid */
+    // 1 fragment, xid=1
+    test_list(0, 2, 1, 1, NULL, 0); // seg=0
+    int expected_1_2_1_1[1] = {0}; // seg=1
+    test_list(1, 2, 1, 1, expected_1_2_1_1, ARRSIZE(expected_1_2_1_1));
+
+    // 1 fragment, xid=2
+    int expected_0_2_2_1[1] = {0}; // seg=0
+    test_list(0, 2, 2, 1, expected_0_2_2_1, ARRSIZE(expected_0_2_2_1));
+    test_list(1, 2, 2, 1, NULL, 0); // seg=1
+
+    // 1 fragment, xid=3
+    test_list(0, 2, 3, 1, NULL, 0); // seg=0
+    int expected_1_2_3_1[1] = {0}; // seg=1
+    test_list(1, 2, 3, 1, expected_1_2_3_1, ARRSIZE(expected_1_2_3_1));
+
+    // 2 fragments, xid=1
+    int expected_0_2_1_2[1] = {1}; // seg=0
+    test_list(0, 2, 1, 2, expected_0_2_1_2, ARRSIZE(expected_0_2_1_2));
+    int expected_1_2_1_2[1] = {0}; // seg=1
+    test_list(1, 2, 1, 2, expected_1_2_1_2, ARRSIZE(expected_1_2_1_2));
+
+    // 2 fragments, xid=2
+    int expected_0_2_2_2[1] = {0}; // seg=0
+    test_list(0, 2, 2, 2, expected_0_2_2_2, ARRSIZE(expected_0_2_2_2));
+    int expected_1_2_2_2[1] = {1}; // seg=1
+    test_list(1, 2, 2, 2, expected_1_2_2_2, ARRSIZE(expected_1_2_2_2));
+
+    // 2 fragments, xid=3
+    int expected_0_2_3_2[1] = {1}; // seg=0
+    test_list(0, 2, 3, 2, expected_0_2_3_2, ARRSIZE(expected_0_2_3_2));
+    int expected_1_2_3_2[1] = {0}; // seg=1
+    test_list(1, 2, 3, 2, expected_1_2_3_2, ARRSIZE(expected_1_2_3_2));
+
+    // 3 fragments, xid=1
+    int expected_0_2_1_3[1] = {1}; // seg=0
+    test_list(0, 2, 1, 3, expected_0_2_1_3, ARRSIZE(expected_0_2_1_3));
+    int expected_1_2_1_3[2] = {0,2}; // seg=1
+    test_list(1, 2, 1, 3, expected_1_2_1_3, ARRSIZE(expected_1_2_1_3));
+
+    // 3 fragments, xid=2
+    int expected_0_2_2_3[2] = {0,2}; // seg=0
+    test_list(0, 2, 2, 3, expected_0_2_2_3, ARRSIZE(expected_0_2_2_3));
+    int expected_1_2_2_3[1] = {1}; // seg=1
+    test_list(1, 2, 2, 3, expected_1_2_2_3, ARRSIZE(expected_1_2_2_3));
+
+    // 3 fragments, xid=3
+    int expected_0_2_3_3[1] = {1}; // seg=0
+    test_list(0, 2, 3, 3, expected_0_2_3_3, ARRSIZE(expected_0_2_3_3));
+    int expected_1_2_3_3[2] = {0,2}; // seg=1
+    test_list(1, 2, 3, 3, expected_1_2_3_3, ARRSIZE(expected_1_2_3_3));
 
 }
 
 static void
-test_list(int segindex, int segtotal, int xid, int fragtotalin, int fragtotalout, int frags[])
+test_list(int segindex, int segtotal, int xid, int fragtotal, int expected[], int expected_total)
 {
     /* prepare the input list */
-    List* list = prepare_fragment_list(3, 0, 1, 1);
-    print_list(list);
+    List* list = prepare_fragment_list(fragtotal, segindex, segtotal, xid);
+    //print_list(list);
+
     /* filter the list */
     List* filtered = filter_fragments_for_segment(list);
-    print_list(list);
+    //print_list(filtered);
+
     /* assert results */
-    assert_int_equal(filtered->length, fragtotalout);
-    ListCell* cell;
-    int i;
-    foreach_with_count(cell, filtered, i)
+    if (expected_total > 0)
     {
-        printf("i=%d\n", i);
-        assert_int_equal(((DataFragment *) lfirst(cell))->index, frags[i]);
+        assert_int_equal(filtered->length, expected_total);
+
+        ListCell* cell;
+        int i;
+        foreach_with_count(cell, filtered, i)
+        {
+            assert_int_equal(((DataFragment *) lfirst(cell))->index, expected[i]);
+        }
+    }
+    else
+    {
+        assert_true(filtered == NIL);
     }
 }
 
@@ -116,6 +190,10 @@ print_list(List* list)
 {
     ListCell* cell;
     printf("list:\n");
+    if (! list) {
+        printf("NIL\n");
+        return;
+    }
     foreach(cell, list)
     {
         printf("%d,", ((DataFragment *) (cell->data.ptr_value))->index);

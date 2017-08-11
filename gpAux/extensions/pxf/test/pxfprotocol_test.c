@@ -43,10 +43,8 @@ test_pxfprotocol_validate_urls(void **state)
     PG_FUNCTION_ARGS = palloc(sizeof(FunctionCallInfoData));
     fcinfo->context = palloc(sizeof(ExtProtocolValidatorData));
     fcinfo->context->type = T_ExtProtocolValidatorData;
-    Value v;
-    v.type = T_String;
-    v.val.str = uri_no_profile;
-    List* list = list_make1(&v);
+    Value *v = makeString(uri_no_profile);
+    List* list = list_make1(v);
     ((ExtProtocolValidatorData*) fcinfo->context)->url_list = list;
 
     /* set mock behavior for uri parsing */
@@ -58,20 +56,12 @@ test_pxfprotocol_validate_urls(void **state)
     expect_string(GPHDUri_verify_cluster_exists, cluster, "default");
     will_be_called(GPHDUri_verify_cluster_exists);
 
-    expect_value(GPHDUri_get_value_for_opt, uri, gphd_uri);
-    expect_string(GPHDUri_get_value_for_opt, key, "fragmenter");
-    expect_any(GPHDUri_get_value_for_opt, val);
-    expect_value(GPHDUri_get_value_for_opt, emit_error, false);
-    will_return(GPHDUri_get_value_for_opt, 0);
-
-    expect_value(GPHDUri_get_value_for_opt, uri, gphd_uri);
-    expect_string(GPHDUri_get_value_for_opt, key, "profile");
-    expect_any(GPHDUri_get_value_for_opt, val);
-    expect_value(GPHDUri_get_value_for_opt, emit_error, false);
-    will_return(GPHDUri_get_value_for_opt, -1);
-
     expect_value(GPHDUri_verify_no_duplicate_options, uri, gphd_uri);
     will_be_called(GPHDUri_verify_no_duplicate_options);
+
+    expect_value(GPHDUri_opt_exists, uri, gphd_uri);
+    expect_string(GPHDUri_opt_exists, key, "profile");
+    will_return(GPHDUri_opt_exists, -1);
 
     expect_value(GPHDUri_verify_core_options_exist, uri, gphd_uri);
     expect_any(GPHDUri_verify_core_options_exist, coreoptions);
@@ -82,6 +72,10 @@ test_pxfprotocol_validate_urls(void **state)
 
     Datum d = pxfprotocol_validate_urls(fcinfo);
     assert_int_equal(DatumGetInt32(d), 0);
+
+    /* cleanup */
+    pfree(fcinfo->context);
+    pfree(fcinfo);
 }
 
 void

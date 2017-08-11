@@ -61,8 +61,8 @@ test_parseGPHDUri_ValidURI(void **state)
     assert_string_equal(parsed->uri, uri_no_segwork);
 
     assert_string_equal(parsed->protocol, "pxf");
-    assert_string_equal(parsed->host, "1.2.3.4");
-    assert_string_equal(parsed->port, "5678");
+    assert_string_equal(parsed->host, "localhost");
+    assert_string_equal(parsed->port, "51200");
     assert_string_equal(parsed->data, "some/path/and/table.tbl");
 
     options = parsed->options;
@@ -324,6 +324,13 @@ test_GPHDUri_parse_segwork_TwoFragments(void **state)
     assert_string_equal(((FragmentData*)lsecond(uri->fragments))->source_name, "tmp/foo");
 
     list_free_deep(uri->fragments);
+    pfree(uri);
+}
+
+void
+test_GPHDUri_parse_segwork(void **state)
+{
+    GPHDUri	*uri = (GPHDUri *)palloc0(sizeof(GPHDUri));
     pfree(uri);
 }
 

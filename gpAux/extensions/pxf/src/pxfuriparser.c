@@ -39,7 +39,6 @@ static void  GPHDUri_free_options(GPHDUri *uri);
 static void  GPHDUri_parse_segwork(GPHDUri *uri, const char *uri_str);
 static List* GPHDUri_parse_fragment(char* fragment, List* fragments);
 static void  GPHDUri_free_fragments(GPHDUri *uri);
-static char* GPHDUri_dup_without_segwork(const char* uri);
 
 /* parseGPHDUri
  *
@@ -81,7 +80,7 @@ parseGPHDUriHostPort(const char *uri_str, const char *host, const int port)
 	initStringInfo(&portstr);
 	appendStringInfo(&portstr, "%d", port);
     uri->port = portstr.data;
-	uri->uri = GPHDUri_dup_without_segwork(uri_str);
+	uri->uri = pstrdup(uri_str);
 	char *cursor = uri->uri;
 
 	GPHDUri_parse_segwork(uri, uri_str);
@@ -472,23 +471,6 @@ GPHDUri_free_fragments(GPHDUri *uri)
 }
 
 /*
- * Returns a uri without the segwork section.
- * segwork section removed so users won't get it 
- * when an error occurs and the uri is printed
- */
-static char*
-GPHDUri_dup_without_segwork(const char* uri)
-{
-	char *segwork = strstr(uri, SEGWORK_SUBSTRING);
-	if (segwork != NULL) {
-        segwork--; /* Discard the last character */
-		return pnstrdup(uri, segwork - uri);
-	}
-	/* segwork_substring was not found */
-	return pstrdup(uri);
-}
-
-/*
  * GPHDUri_opt_exists
  *
  * Returns 0 if the key was found, -1 otherwise.
@@ -595,4 +577,38 @@ GPHDUri_verify_cluster_exists(GPHDUri *uri, char* cluster)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("Invalid URI %s: CLUSTER NAME %s not found", uri->host, cluster)));
+}
+
+/*
+ * GPHDUri_get_value_for_opt
+ *
+ * Given a key, find the matching val and assign it to 'val'.
+ * If 'emit_error' is set, report an error and quit if the
+ * requested key or its value is missing.
+ *
+ * Returns 0 if the key was found, -1 otherwise.
+ */
+int
+GPHDUri_get_value_for_opt(GPHDUri *uri, char *key, char **val, bool emit_error)
+{
+	ListCell	*item;
+	foreach(item, uri->options)
+	{
+		OptionData *data = (OptionData*)lfirst(item);
+		if (pg_strcasecmp(data->key, key) == 0)
+		{
+			*val = data->value;
+			if (emit_error && !(*val))
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("No value assigned to the %s option in " "%s", key, uri->uri)));
+			return 0;
+		}
+	}
+
+	if (emit_error)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("Missing %s option in %s", key, uri->uri)));
+	return -1;
 }

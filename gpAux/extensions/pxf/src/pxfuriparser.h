@@ -80,6 +80,7 @@ typedef struct GPHDUri
  */
 GPHDUri	*parseGPHDUri(const char *uri_str);
 GPHDUri	*parseGPHDUriHostPort(const char *uri_str, const char *host, const int port);
+int		 GPHDUri_get_value_for_opt(GPHDUri *uri, char *key, char **val, bool emit_error);
 int		 GPHDUri_opt_exists(GPHDUri *uri, char *key);
 void 	 GPHDUri_verify_no_duplicate_options(GPHDUri *uri);
 void 	 GPHDUri_verify_core_options_exist(GPHDUri *uri, List *coreOptions);
@@ -89,5 +90,10 @@ void 	 GPHDUri_verify_cluster_exists(GPHDUri *uri, char* cluster);
  * Frees the elements of the data structure
  */
 void 	 freeGPHDUri(GPHDUri *uri);
+
+/*
+ *  sets val to a value based on key
+ */
+
 
 #endif	// _PXFURIPARSER_H_

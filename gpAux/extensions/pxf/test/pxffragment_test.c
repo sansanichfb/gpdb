@@ -26,9 +26,6 @@ static void test_list(int segindex, int segtotal, int xid, int fragtotal, int ex
 void
 test_filter_fragments_for_segment(void **state)
 {
-    // single segment, 0 frags, xid=1 -- should throw exception
-    //int expected0[1] = {0};
-    //test_list(0, 1, 1, 0, NULL, 0);
 
     /* --- 1 segment, all fragements should be processed by it */
     int expected_1_1_0[1] = {0}; // 1 fragment
@@ -95,6 +92,41 @@ test_filter_fragments_for_segment(void **state)
     int expected_1_2_3_3[2] = {0,2}; // seg=1
     test_list(1, 2, 3, 3, expected_1_2_3_3, ARRSIZE(expected_1_2_3_3));
 
+    /* special case -- no fragments */
+    MemoryContext old_context = CurrentMemoryContext;
+    PG_TRY();
+    {
+        test_list(0, 1, 1, 0, NULL, 0);
+        assert_false("Expected Exception");
+    }
+    PG_CATCH();
+    {
+        MemoryContextSwitchTo(old_context);
+        ErrorData *edata = CopyErrorData();
+        assert_true(edata->elevel == ERROR);
+        char* expected_message = pstrdup("internal error in pxffragment.c:filter_fragments_for_segment. Parameter list is null.");
+        assert_string_equal(edata->message, expected_message);
+        pfree(expected_message);
+    }
+    PG_END_TRY();
+
+    /* special case -- invalid transaction id */
+    old_context = CurrentMemoryContext;
+    PG_TRY();
+    {
+        test_list(0, 1, 0, 1, NULL, 0);
+        assert_false("Expected Exception");
+    }
+    PG_CATCH();
+    {
+        MemoryContextSwitchTo(old_context);
+        ErrorData *edata = CopyErrorData();
+        assert_true(edata->elevel == ERROR);
+        char* expected_message = pstrdup("internal error in pxffragment.c:filter_fragments_for_segment. Cannot get distributed transaction identifier.");
+        assert_string_equal(edata->message, expected_message);
+        pfree(expected_message);
+    }
+    PG_END_TRY();
 }
 
 static void
@@ -102,11 +134,9 @@ test_list(int segindex, int segtotal, int xid, int fragtotal, int expected[], in
 {
     /* prepare the input list */
     List* list = prepare_fragment_list(fragtotal, segindex, segtotal, xid);
-    //print_list(list);
 
     /* filter the list */
     List* filtered = filter_fragments_for_segment(list);
-    //print_list(filtered);
 
     /* assert results */
     if (expected_total > 0)
@@ -132,7 +162,8 @@ prepare_fragment_list(int fragtotal, int segindex, int segtotal, int xid)
     GpIdentity.segindex = segindex;
     GpIdentity.numsegments = segtotal;
 
-    will_return(getDistributedTransactionId, xid);
+    if (fragtotal > 0)
+        will_return(getDistributedTransactionId, xid);
 
     List* result = NIL;
     for (int i=0; i<fragtotal; i++) {

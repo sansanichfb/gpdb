@@ -286,13 +286,13 @@ filter_fragments_for_segment(List* list)
     if (!list)
         ereport(ERROR,
                 (errcode(ERRCODE_INTERNAL_ERROR),
-                        errmsg("internal error in pxfutils.c:filter_list. Parameter list is null.")));
+                        errmsg("internal error in pxffragment.c:filter_fragments_for_segment. Parameter list is null.")));
 
     DistributedTransactionId xid = getDistributedTransactionId();
     if (xid == InvalidDistributedTransactionId)
         ereport(ERROR,
                 (errcode_for_file_access(),
-                        errmsg("internal error in pxfutils.c:filter_list. Cannot get distributed transaction identifier")));
+                        errmsg("internal error in pxffragment.c:filter_fragments_for_segment. Cannot get distributed transaction identifier.")));
 
     /*
      * to determine which segment S should process an element at a given index I, use a randomized MOD function

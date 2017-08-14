@@ -332,6 +332,26 @@ test_GPHDUri_parse_segwork(void **state)
     pfree(uri);
 }
 
+void
+test_GPHDUri_opt_exists(void **state)
+{
+    char* uri_str = "xyz?FRAGMENTER=HdfsDataFragmenter&RESOLVER=SomeResolver";
+    char* cursor = uri_str + 3; // location of '?'
+    GPHDUri	*uri = (GPHDUri *)palloc0(sizeof(GPHDUri));
+    expect_normalize_key_name("FRAGMENTER");
+    expect_normalize_key_name("RESOLVER");
+    GPHDUri_parse_options(uri, &cursor);
+
+    int exists = GPHDUri_opt_exists(uri, "FRAGMENTER");
+    assert_int_equal(exists, 0);
+    exists = GPHDUri_opt_exists(uri, "RESOLVER");
+    assert_int_equal(exists, 0);
+    exists = GPHDUri_opt_exists(uri, "ACCESSOR");
+    assert_int_equal(exists, -1);
+
+    pfree(uri);
+}
+
 /*
  * Helper function for parse fragment test cases
  */
@@ -438,7 +458,8 @@ main(int argc, char* argv[])
             unit_test(test_GPHDUri_parse_fragment_MissingUserData),
             unit_test(test_GPHDUri_parse_fragment_MissingProfile),
             unit_test(test_GPHDUri_parse_segwork_NoSegwork),
-            unit_test(test_GPHDUri_parse_segwork_TwoFragments)
+            unit_test(test_GPHDUri_parse_segwork_TwoFragments),
+            unit_test(test_GPHDUri_opt_exists)
     };
 
     MemoryContextInit();
